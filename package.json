@@ -1,0 +1,44 @@
+{
+  "name": "markver",
+  "version": "1.0.0",
+  "description": "Order Execution Engine for Solana DEX Trading",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": [
+    "solana",
+    "dex",
+    "trading",
+    "order-execution"
+  ],
+  "author": "nightfury",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/websocket": "^10.0.1",
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^5.20.4",
+    "docker": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "ioredis": "^5.4.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/ws": "^8.5.12",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.2",
+    "vitest": "^2.1.5"
+  }
+}

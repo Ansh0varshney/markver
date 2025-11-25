@@ -1,0 +1,31 @@
+MARKVER - Order Execution Engine
+================================
+
+Quick Setup Instructions:
+
+1. Install dependencies:
+   npm install
+
+2. Start PostgreSQL (you can use local Redis):
+   docker compose up -d postgres
+
+3. Setup database:
+   npx prisma generate
+   npx prisma db push
+
+4. Start server:
+   npm run dev
+
+5. Test it:
+   - Open test-client.html in your browser
+   - Click "Create 5 Orders (Demo)"
+   - Watch the terminal logs for DEX routing decisions
+
+6. Run tests:
+   npm test
+
+For detailed instructions, see QUICKSTART.md
+For full documentation, see README.md
+
+Server will run on: http://localhost:3000
+Health check: http://localhost:3000/api/health

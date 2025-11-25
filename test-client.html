@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markver - WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 {
+            color: #4ec9b0;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #3e3e42;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        button {
+            background: #0e639c;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #1177bb;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #3e3e42;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .status-pending { color: #dcdcaa; }
+        .status-routing { color: #569cd6; }
+        .status-building { color: #c586c0; }
+        .status-submitted { color: #4fc1ff; }
+        .status-confirmed { color: #4ec9b0; font-weight: bold; }
+        .status-failed { color: #f48771; font-weight: bold; }
+        .status-error { color: #f48771; }
+        .order-box {
+            background: #2d2d30;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #4ec9b0;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        .stat {
+            background: #2d2d30;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            flex: 1;
+            margin: 0 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ec9b0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Markver - Order Execution Engine</h1>
+    <p>WebSocket Test Client for Real-Time Order Status Updates</p>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value" id="totalOrders">0</div>
+            <div>Total Orders</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="activeOrders">0</div>
+            <div>Active</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="completedOrders">0</div>
+            <div>Completed</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="failedOrders">0</div>
+            <div>Failed</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Create Order</h2>
+            <label>Order Type:</label>
+            <select id="orderType">
+                <option value="market">Market</option>
+                <option value="limit" disabled>Limit (Not Yet Supported)</option>
+                <option value="sniper" disabled>Sniper (Not Yet Supported)</option>
+            </select>
+
+            <label>Token In:</label>
+            <input type="text" id="tokenIn" value="SOL" placeholder="SOL">
+
+            <label>Token Out:</label>
+            <input type="text" id="tokenOut" value="USDC" placeholder="USDC">
+
+            <label>Amount In:</label>
+            <input type="number" id="amountIn" value="10" placeholder="10" step="0.01">
+
+            <label>User ID (optional):</label>
+            <input type="text" id="userId" placeholder="user123">
+
+            <button onclick="createOrder()">Create Order</button>
+            <button onclick="createMultipleOrders()" style="background: #7c4dff; margin-top: 10px;">Create 5 Orders (Demo)</button>
+
+            <h3>Active Orders</h3>
+            <div id="activeOrdersList"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Order Status Updates</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        const WS_BASE = 'ws://localhost:3000';
+        const orders = new Map();
+        let stats = { total: 0, active: 0, completed: 0, failed: 0 };
+
+        function updateStats() {
+            document.getElementById('totalOrders').textContent = stats.total;
+            document.getElementById('activeOrders').textContent = stats.active;
+            document.getElementById('completedOrders').textContent = stats.completed;
+            document.getElementById('failedOrders').textContent = stats.failed;
+        }
+
+        function addLog(message, type = 'info') {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry status-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateActiveOrders() {
+            const container = document.getElementById('activeOrdersList');
+            container.innerHTML = '';
+
+            orders.forEach((order, orderId) => {
+                if (order.status !== 'confirmed' && order.status !== 'failed') {
+                    const box = document.createElement('div');
+                    box.className = 'order-box';
+                    box.innerHTML = `
+                        <strong>${orderId.substring(0, 20)}...</strong><br>
+                        Status: <span class="status-${order.status}">${order.status}</span><br>
+                        ${order.dexSelected ? `DEX: ${order.dexSelected}` : ''}
+                    `;
+                    container.appendChild(box);
+                }
+            });
+        }
+
+        function createOrder() {
+            const orderData = {
+                orderType: document.getElementById('orderType').value,
+                tokenIn: document.getElementById('tokenIn').value.toUpperCase(),
+                tokenOut: document.getElementById('tokenOut').value.toUpperCase(),
+                amountIn: parseFloat(document.getElementById('amountIn').value),
+                userId: document.getElementById('userId').value || undefined
+            };
+
+            submitOrder(orderData);
+        }
+
+        function createMultipleOrders() {
+            addLog('Creating 5 orders simultaneously...', 'routing');
+            const amounts = [5, 10, 15, 20, 25];
+
+            amounts.forEach((amount, index) => {
+                setTimeout(() => {
+                    submitOrder({
+                        orderType: 'market',
+                        tokenIn: 'SOL',
+                        tokenOut: 'USDC',
+                        amountIn: amount,
+                        userId: `demo_user_${index + 1}`
+                    });
+                }, index * 100);
+            });
+        }
+
+        function submitOrder(orderData) {
+            const ws = new WebSocket(`${WS_BASE}/api/orders/execute`);
+
+            ws.onopen = () => {
+                addLog(`Submitting order: ${orderData.amountIn} ${orderData.tokenIn} → ${orderData.tokenOut}`, 'pending');
+
+                // Send order data
+                ws.send(JSON.stringify(orderData));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const { orderId, status, timestamp, data: orderData } = data;
+
+                if (!orders.has(orderId)) {
+                    orders.set(orderId, { status, data: {} });
+                    stats.total++;
+                    stats.active++;
+                }
+
+                orders.get(orderId).status = status;
+                if (orderData) {
+                    orders.get(orderId).data = { ...orders.get(orderId).data, ...orderData };
+                }
+
+                // Log status update
+                let message = `${orderId.substring(0, 20)}... → ${status.toUpperCase()}`;
+
+                if (status === 'routing' && orderData) {
+                    message += ` | Raydium: $${orderData.raydiumPrice?.toFixed(2)} | Meteora: $${orderData.meteoraPrice?.toFixed(2)}`;
+                    if (orderData.dexSelected) {
+                        message += ` | Selected: ${orderData.dexSelected.toUpperCase()}`;
+                        orders.get(orderId).dexSelected = orderData.dexSelected;
+                    }
+                } else if (status === 'confirmed' && orderData) {
+                    message += ` | Price: $${orderData.executedPrice?.toFixed(2)} | Amount: ${orderData.amountOut?.toFixed(2)} | TX: ${orderData.txHash?.substring(0, 8)}...`;
+                    stats.active--;
+                    stats.completed++;
+                } else if (status === 'failed' && orderData) {
+                    message += ` | Error: ${orderData.error}`;
+                    stats.active--;
+                    stats.failed++;
+                }
+
+                addLog(message, status);
+                updateStats();
+                updateActiveOrders();
+            };
+
+            ws.onerror = (error) => {
+                addLog(`WebSocket error: ${error}`, 'error');
+            };
+
+            ws.onclose = () => {
+                addLog('🔌 WebSocket connection closed', 'info');
+            };
+        }
+
+        // Initialize
+        addLog('WebSocket client ready. Create an order to start!', 'confirmed');
+    </script>
+</body>
+</html>

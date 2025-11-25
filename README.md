@@ -319,8 +319,7 @@ The project includes 10+ comprehensive tests covering:
 6. Configure environment variables
 
 ## Demo Video
-
-**[Link to YouTube Demo Video]**
+(https://youtu.be/5KAfYfUOq98)
 
 The video demonstrates:
 - 5 concurrent orders submitted simultaneously
